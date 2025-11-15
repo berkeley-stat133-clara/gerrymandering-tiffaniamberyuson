@@ -3,3 +3,27 @@ title: Data Cleaning
 format: typst
 ---
 
+```{r}
+# Read the raw data
+g24_raw <- read_csv("data/g24_sov_by_g24_svprec.csv")
+
+# Make a copy so we can clean
+g24_clean <- g24_raw
+
+for (j in 21:76) {
+    g24_clean[[j]] <- as.numeric(g24_clean[[j]])
+}
+
+# Check the svprec_key precinct key is unique, does not have duplicates
+dup_svprec_key <- g24_clean |>
+    count(SVPREC_KEY) |>
+    filter(n > 1)
+
+dup_svprec_key # should be empty; if non-empty, there are duplicate keys
+
+# let's take a looksie into our cleaned structure
+glimpse(g24_clean)
+
+# save our cleaned data for later
+write_csv(g24_clean, "data/g24_precinct_clean.csv")
+```
