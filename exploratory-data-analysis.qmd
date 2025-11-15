@@ -5,24 +5,111 @@ format: typst
 
 ### Question 1
 
-Put your question here.
+What is the range of total votes across different precincts?
+
+I want to see how precincts may differ in size with votes.
 
 ### Answer 1
 
-Put your answer here.
+```{r}
+summary(g24$TOTVOTE)
+
+# filter out summary rows that end with TOT because they are not a singular precinct but instead a sum which is not helpful for our analysis in each precinct
+
+g24_precinct <- g24 |>
+    filter(
+    !str_detect(SVPREC, "TOT$"),
+    CDDIST != 0
+    )
+
+ggplot(g24_precinct, aes(x = TOTVOTE)) +
+    geom_histogram(bins = 50) +
+    scale_x_log10() +
+    labs(title = "Distribution of Total Votes Per Precinct", x = "Total Votes", y = "Number of Precincts")
+
+```
+
+Most precincts have low totals at about less than 200 votes. A small number of precincts have more than a few thousand votes. The median precinct has about 100 votes. Having around 800-900 votes is popular for a large amount of precincts but maybe more popular than having 90-150 votes.
 
 ### Question 2
 
-Put your question here.
+Which congressional districts had the closest races? How competitive were they?
 
 ### Answer 2
 
-Put your answer here.
+# Let's take a look at the Democratic and Republican votes and sort by congressional district (CDDIST) then calculate the margin of victory. 
+```{r}
+g24_precinct <- g24_precinct |>
+  mutate(
+    dem_votes = as.numeric(CNGDEM01) + as.numeric(CNGDEM02),
+    rep_votes = as.numeric(CNGREP01) + as.numeric (CNGREP02)
+  )
+
+district_results <- g24_precinct |>
+    group_by(CDDIST) |>
+    summarise(
+        dem = sum(dem_votes, na.rm = TRUE),
+        rep = sum(rep_votes, na.rm = TRUE)
+    ) |>
+        mutate(
+            total = dem + rep,
+            margin = abs(dem - rep),
+            margin_share = margin / total
+        ) |>
+            arrange(margin_share)
+
+# Plot: margin share by congressional district (smaller = more competitive)
+
+ggplot(district_results, 
+    aes(x = reorder(as.factor(CDDIST), margin_share), y = margin_share)) +
+        geom_col() +
+        coord_flip() +
+        labs(
+            title = "Congressional District Competitiveness",
+            x = "Congressional District",
+            y = "Margin of Total Major-Party Votes"
+        )
+
+```
+
+Congressional Districts 45, 27, 47, and 13 were the most competitive races due to the small margin of total major-party votes. Districts with a margin share of 1.0 mean that they have the same-party election, i.e., Democrat vs. Democrat.
 
 ### Question 3
 
-Put your question here.
+What kind of voting patterns occur accross all precinct ballot batches? Out of each row entry, how many contain votes for Democrat, Republican, both major-parties or none?
 
 ### Answer 3
 
-Put your answer here.
+```{r}
+# Four categories of both parties, only democrat, only republican or no major-party votes
+precinct_party_type <- g24_precinct |>
+    mutate(
+        race_type = case_when(
+            dem_votes > 0 & rep_votes > 0 ~ "Both Parties",
+            dem_votes > 0 & rep_votes == 0 ~ "Only Democrat",
+            rep_votes > 0 & dem_votes == 0 ~ "Only Republican",
+            TRUE ~ "No Major-Party Votes"
+        )
+    ) |>
+        count(race_type) |>
+
+    # calculate percentage instead of using large numbers
+
+    mutate(
+        percent = round(100 * n / sum(n), 1)
+    )
+
+# Plot
+
+ggplot(precinct_party_type,
+    aes(x = reorder(race_type, percent), y = percent, fill = race_type)) +
+        geom_col() +
+        labs(
+            title = " Types of Precinct-Level Congressional Races",
+            x = "Race Type",
+            y = "Number of Precinct Entries"
+        ) +
+theme(axis.text.x = element_text(angle = 20, hjust = 1), legend.position = "none")
+```
+
+~2% of precinct-level entries contained only Republican. ~3% contained only Democratic votes. More than 60% of entries contained both parties and around 30% contained no major-party votes.
